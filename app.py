@@ -24,10 +24,9 @@ st.write("Crie vídeos verticais com tipografia elegante e narração suave.")
 st.sidebar.header("Configurações Básicas")
 pexels_key = st.sidebar.text_input("Sua API Key do Pexels", type="password", help="Insira sua chave gratuita do Pexels.")
 
-# Função assíncrona para gerar a voz com edge-tts
+# Função assíncrona para gerar a voz com edge-tts (Versão Ultra Estável)
 async def gerar_voz(texto, voz, arquivo_audio):
-    # Adicionamos uma leve taxa de velocidade (-10%) para a voz ficar mais calma, pausada e reflexiva
-    communicate = edge_tts.Communicate(texto, voz, rate="-10%")
+    communicate = edge_tts.Communicate(texto, voz)
     await communicate.save(arquivo_audio)
 
 # Função para buscar e baixar vídeo do Pexels
