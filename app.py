@@ -29,23 +29,48 @@ async def gerar_voz(texto, voz, arquivo_audio):
     communicate = edge_tts.Communicate(texto, voz)
     await communicate.save(arquivo_audio)
 
-# Função para buscar e baixar vídeo do Pexels
+# Função para buscar e baixar vídeo do Pexels (Versão Ultra Protegida contra formatos estranhos)
 def baixar_video_pexels(api_key, busca="nature"):
-    url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=20"
-    headers = {"Authorization": api_key}
+    # Link de um vídeo reserva em alta definição (caso o Pexels mande um formato inválido)
+    video_reserva = "https://assets.mixkit.co/videos/preview/mixkit-beautiful-aerial-view-of-verdant-hills-42354-large.mp4"
     
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        dados = response.json()
-        videos = dados.get("videos", [])
-        if videos:
-            video_escolhido = random.choice(videos)
-            arquivos_video = video_escolhido.get("video_files", [])
-            for f in arquivos_video:
-                if f.get("width") == 720 or f.get("width") == 1080:
-                    return f.get("link")
-            return arquivos_video[0].get("link") if arquivos_video else None
-    return None
+    try:
+        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=30"
+        headers = {"Authorization": api_key}
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            dados = response.json()
+            videos = dados.get("videos", [])
+            
+            if videos:
+                # Embaralha os resultados para trazer sempre vídeos diferentes
+                random.shuffle(videos)
+                
+                for video_escolhido in videos:
+                    arquivos_video = video_escolhido.get("video_files", [])
+                    
+                    # Procura por um arquivo que seja estritamente MP4 e tenha boa resolução
+                    for f in arquivos_video:
+                        link = f.get("link", "")
+                        tipo = f.get("file_type", "")
+                        
+                        # Garante que é um MP4 legítimo e vertical
+                        if "mp4" in tipo.lower() or link.endswith(".mp4") or "video/mp4" in tipo.lower():
+                            if f.get("width") == 720 or f.get("width") == 1080:
+                                return link
+                
+                # Se não achou na resolução exata, tenta pegar o primeiro MP4 disponível
+                for video_escolhido in videos:
+                    for f in video_escolhido.get("video_files", []):
+                        link = f.get("link", "")
+                        if ".mp4" in link.lower() or "mp4" in f.get("file_type", "").lower():
+                            return link
+                            
+        return video_reserva
+    except Exception:
+        # Se houver qualquer erro de conexão ou limite da API, entrega o vídeo de montanhas reserva
+        return video_reserva
 
 # Função para quebrar o texto em linhas harmoniosas (frases mais curtas ficam mais bonitas)
 def quebrar_texto(texto, max_caracteres=22):
