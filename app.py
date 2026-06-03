@@ -13,25 +13,26 @@ import tempfile
 from PIL import Image
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
-    
+
 # Configuração da página do Streamlit
 st.set_page_config(page_title="Gerador de Vídeos Bíblicos", page_icon="📖", layout="centered")
 
-st.title("📖 Gerador de Vídeos Bíblicos Curtos")
-st.write("Crie vídeos verticais para Reels, TikTok e Shorts totalmente de graça.")
+st.title("📖 Gerador de Vídeos Bíblicos Premium")
+st.write("Crie vídeos verticais com tipografia elegante e narração suave.")
 
-# Sidebar para configurações de chaves e créditos
+# Sidebar para configurações de chaves
 st.sidebar.header("Configurações Básicas")
 pexels_key = st.sidebar.text_input("Sua API Key do Pexels", type="password", help="Insira sua chave gratuita do Pexels.")
 
 # Função assíncrona para gerar a voz com edge-tts
 async def gerar_voz(texto, voz, arquivo_audio):
-    communicate = edge_tts.Communicate(texto, voz)
+    # Adicionamos uma leve taxa de velocidade (-10%) para a voz ficar mais calma, pausada e reflexiva
+    communicate = edge_tts.Communicate(texto, voz, rate="-10%")
     await communicate.save(arquivo_audio)
 
 # Função para buscar e baixar vídeo do Pexels
 def baixar_video_pexels(api_key, busca="nature"):
-    url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=15"
+    url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=20"
     headers = {"Authorization": api_key}
     
     response = requests.get(url, headers=headers)
@@ -40,7 +41,6 @@ def baixar_video_pexels(api_key, busca="nature"):
         videos = dados.get("videos", [])
         if videos:
             video_escolhido = random.choice(videos)
-            # Pega o arquivo de menor resolução/vertical para economizar memória do Streamlit
             arquivos_video = video_escolhido.get("video_files", [])
             for f in arquivos_video:
                 if f.get("width") == 720 or f.get("width") == 1080:
@@ -48,28 +48,43 @@ def baixar_video_pexels(api_key, busca="nature"):
             return arquivos_video[0].get("link") if arquivos_video else None
     return None
 
-# Função para quebrar o texto em linhas para caber na tela do celular
-def quebrar_texto(texto, max_caracteres=25):
+# Função para quebrar o texto em linhas harmoniosas (frases mais curtas ficam mais bonitas)
+def quebrar_texto(texto, max_caracteres=22):
     palavras = texto.split()
     linhas = []
     linha_atual = []
-    for palavra in palavras:
+    for palabra in palavras:
         if len(" ".join(linha_atual + [palavra])) <= max_caracteres:
             linha_atual.append(palavra)
         else:
             linhas.append(" ".join(linha_atual))
             linha_atual = [palavra]
-    if linha_atual:
-        linhas.append(" ".join(linha_atual))
+    if App_linha := " ".join(linha_atual):
+        linhas.append(App_linha)
     return "\n".join(linhas)
+
+# Função para baixar uma fonte bonita do Google Fonts caso não exista localmente
+def obter_fonte_premium(tamanho):
+    caminho_fonte = os.path.join(tempfile.gettempdir(), "Montserrat-Bold.ttf")
+    if not os.path.exists(caminho_fonte):
+        url_fonte = "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Bold.ttf"
+        r = requests.get(url_fonte)
+        with open(caminho_fonte, "wb") as f:
+            f.write(r.content)
+    return ImageFont.truetype(caminho_fonte, tamanho)
 
 # Interface de entrada do usuário
 texto_versiculo = st.text_area("Digite o Versículo Bíblico:", placeholder="Ex: O Senhor é o meu pastor, nada me faltará.")
 referencia = st.text_input("Referência Bíblica:", placeholder="Ex: Salmos 23:1")
 
 opcao_voz = st.selectbox(
-    "Escolha a voz da Narração:",
-    options=["pt-BR-AntonioNeural (Masculina)", "pt-BR-FranciscaNeural (Feminina)"],
+    "Escolha o estilo de Narração Suave:",
+    options=[
+        "pt-BR-FabioNeural (Masculina - Voz Profunda/Narrador)", 
+        "pt-BR-ThalitaNeural (Feminina - Voz Suave/Calma)",
+        "pt-BR-AntonioNeural (Masculina - Padrão)", 
+        "pt-BR-FranciscaNeural (Feminina - Padrão)"
+    ],
     index=0
 )
 voz_code = opcao_voz.split(" ")[0]
@@ -80,109 +95,97 @@ estilo_fundo = st.selectbox(
     index=0
 )
 
-# Botão principal de execução
-if st.button("✨ Gerar Vídeo"):
+if st.button("✨ Gerar Vídeo Premium"):
     if not pexels_key:
         st.error("Por favor, insira sua API Key do Pexels na barra lateral.")
     elif not texto_versiculo or not referencia:
         st.error("Por favor, preencha o versículo e a referência.")
     else:
-        with st.spinner("Processando... Isso pode levar de 1 a 2 minutos."):
+        with st.spinner("Sua IA está editando o vídeo... Aguarde."):
             try:
-                # Criando arquivos temporários para não estourar o armazenamento do servidor
                 temp_dir = tempfile.gettempdir()
                 caminho_audio = os.path.join(temp_dir, "voztmp.mp3")
                 caminho_video_bruto = os.path.join(temp_dir, "fundo_bruto.mp4")
                 caminho_final = os.path.join(temp_dir, "video_gospel_pronto.mp4")
 
-                # Passo 1: Gerar o Áudio da Voz
-                st.text("🎙️ Gerando a narração...")
+                # 1. Gerar o Áudio com velocidade reduzida
+                st.text("🎙️ Sintetizando narração suave...")
                 texto_completo = f"{texto_versiculo}. {referencia}"
                 asyncio.run(gerar_voz(texto_completo, voz_code, caminho_audio))
 
-                # Passo 2: Buscar vídeo no Pexels
-                st.text("🌊 Buscando vídeo de paisagem de graça...")
+                # 2. Buscar vídeo no Pexels
+                st.text("🌊 Buscando fundo cinematográfico...")
                 link_video = baixar_video_pexels(pexels_key, estilo_fundo)
                 
                 if not link_video:
-                    st.error("Não encontramos vídeos no Pexels com essa palavra-chave. Tente outra.")
+                    st.error("Erro ao buscar mídias. Tente novamente.")
                 else:
-                    # Download do vídeo de fundo
                     res_video = requests.get(link_video)
                     with open(caminho_video_bruto, "wb") as f:
                         f.write(res_video.content)
 
-                    # Passo 3: Montagem do vídeo com MoviePy e Legenda manual (Pillow)
-                    st.text("🎬 Juntando áudio, vídeo e aplicando as legendas...")
+                    # 3. Montagem Cinematográfica com MoviePy
+                    st.text("🎬 Aplicando tipografia Montserrat e renderizando...")
                     
                     audio_clip = AudioFileClip(caminho_audio)
                     duracao_audio = audio_clip.duration
                     
                     video_fundo = VideoFileClip(caminho_video_bruto).resize(newsize=(1080, 1920))
-                    # Se o vídeo de fundo for menor que o áudio, ele entra em loop
                     if video_fundo.duration < duracao_audio:
                         video_fundo = video_fundo.loop(duration=duracao_audio)
                     else:
                         video_fundo = video_fundo.subclip(0, duracao_audio)
 
-                    # Prepara o texto formatado com quebras de linha
+                    # Formata o texto
                     texto_legenda = quebrar_texto(texto_versiculo)
-                    texto_final_tela = f'"{texto_legenda}"\n\n- {referencia}'
+                    texto_final_tela = f'{texto_legenda}\n\n{referencia.upper()}'
 
-                    # Função interna para desenhar o texto em cada frame sem depender de ImageMagick
+                    # Função de desenho com fonte customizada e melhor espaçamento
                     def criar_frame_com_texto(gf, t):
-                        frame = gf(t) # pega o frame original do vídeo (Matriz NumPy)
+                        frame = gf(t)
                         imagem_pil = Image.fromarray(frame)
                         draw = ImageDraw.Draw(imagem_pil)
                         
-                        # Usando a fonte padrão do sistema disponível no Linux/Streamlit Cloud
-                        try:
-                            font = ImageFont.truetype("DejaVuSans-Bold.ttf", 55)
-                        except IOError:
-                            font = ImageFont.load_default()
+                        # Carrega a fonte Montserrat baixada dinamicamente
+                        font = obter_fonte_premium(58)
 
-                        # Desenha uma leve sombra preta atrás para dar leitura
                         largura, altura = imagem_pil.size
-                        x, y = largura / 2, altura / 2
+                        # Centralizado na largura, mas ligeiramente deslocado para baixo (y = altura / 1.95) para melhor estética
+                        x, y = largura / 2, altura / 1.95
                         
-                        # Renderiza o texto de forma centralizada
+                        # Desenha a legenda com contorno (stroke) bem definido para acabamento profissional
                         draw.text((x, y), texto_final_tela, font=font, fill="white", anchor="mm", align="center", 
-                                  stroke_width=4, stroke_fill="black")
+                                  stroke_width=5, stroke_fill=(15, 15, 15))
                         
                         return np.array(imagem_pil)
 
-                    # Aplica a função de renderização de texto frame por frame no vídeo
                     video_com_texto = video_fundo.fl(criar_frame_com_texto, keep_duration=True)
                     video_final = video_com_texto.set_audio(audio_clip)
 
-                    # Exporta o vídeo final reduzindo o bitrate para não estourar a memória do Streamlit
                     video_final.write_videofile(
                         caminho_final, 
                         fps=24, 
                         codec="libx264", 
                         audio_codec="aac",
-                        bitrate="1500k",
+                        bitrate="1800k",
                         threads=2,
                         logger=None
                     )
 
-                    # Fecha os arquivos abertos na memória
                     video_final.close()
                     video_fundo.close()
                     audio_clip.close()
 
-                    # Exibe o resultado final na tela do site
-                    st.success("🎉 Seu vídeo está pronto!")
+                    st.success("🎉 Seu vídeo cinematográfico está pronto!")
                     st.video(caminho_final)
 
-                    # Botão para baixar o vídeo gerado
                     with open(caminho_final, "rb") as file:
                         st.download_button(
-                            label="⬇️ Baixar Vídeo para o Dispositivo",
+                            label="⬇️ Baixar Vídeo Configurado",
                             data=file,
-                            file_name="video_biblico_diario.mp4",
+                            file_name="versiculo_premium.mp4",
                             mime="video/mp4"
                         )
 
             except Exception as e:
-                st.error(f"Ocorreu um erro inesperado no processamento: {e}")
+                st.error(f"Erro no processador visual: {e}")
