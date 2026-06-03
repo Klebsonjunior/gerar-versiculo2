@@ -52,14 +52,14 @@ def quebrar_texto(texto, max_caracteres=22):
     palavras = texto.split()
     linhas = []
     linha_atual = []
-    for palabra in palavras:
+    for palavra in palavras:
         if len(" ".join(linha_atual + [palavra])) <= max_caracteres:
             linha_atual.append(palavra)
         else:
             linhas.append(" ".join(linha_atual))
             linha_atual = [palavra]
-    if App_linha := " ".join(linha_atual):
-        linhas.append(App_linha)
+    if linha_atual:
+        linhas.append(" ".join(linha_atual))
     return "\n".join(linhas)
 
 # Função para baixar uma fonte bonita do Google Fonts caso não exista localmente
