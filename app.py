@@ -9,6 +9,11 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import VideoFileClip, AudioFileClip, VideoClip
 import tempfile
 
+# Correção para o erro de compatibilidade do Pillow/MoviePy
+from PIL import Image
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+    
 # Configuração da página do Streamlit
 st.set_page_config(page_title="Gerador de Vídeos Bíblicos", page_icon="📖", layout="centered")
 
