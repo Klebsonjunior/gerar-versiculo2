@@ -272,31 +272,40 @@ def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[
 
 def baixar_video_pexels(api_key: str, busca: str) -> str | None:
     try:
-        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=landscape&per_page=30&size=large"
+        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=40&size=large"
         r   = requests.get(url, headers={"Authorization": api_key}, timeout=10)
         if r.status_code != 200:
             return None
         videos = r.json().get("videos", [])
         random.shuffle(videos)
-        # Coleta todos os arquivos MP4 e ordena por resolução (4K primeiro)
+        # Coleta MP4s verticais (h > w), ordena por resolução (maior primeiro)
         candidatos = []
+        fallback   = []
         for video in videos:
             for arq in video.get("video_files", []):
                 link = arq.get("link", "")
                 tipo = arq.get("file_type", "").lower()
-                w    = arq.get("width", 0) or 0
+                w    = arq.get("width",  0) or 0
                 h    = arq.get("height", 0) or 0
-                if "mp4" in tipo or ".mp4" in link.lower():
-                    candidatos.append((w * h, link))
-        # Ordena do maior para o menor (4K = 3840×2160 = 8.3M px)
+                if not ("mp4" in tipo or ".mp4" in link.lower()):
+                    continue
+                if h > w:                        # genuinamente vertical
+                    candidatos.append((w * h, w, h, link))
+                else:
+                    fallback.append((w * h, w, h, link))
+
+        # Prefere verticais com pelo menos 720px de largura (≈ HD portrait)
         candidatos.sort(key=lambda x: x[0], reverse=True)
-        # Pega o melhor que não seja absurdamente grande (>200MB estimado)
-        for pixels, link in candidatos:
-            if pixels >= 1920 * 1080:   # pelo menos Full HD
+        for pixels, w, h, link in candidatos:
+            if w >= 720:
                 return link
-        # Fallback: qualquer um
+        # Qualquer vertical
         if candidatos:
-            return candidatos[0][1]
+            return candidatos[0][3]
+        # Último recurso: horizontal (será cropado sem distorção pelo FFmpeg)
+        fallback.sort(key=lambda x: x[0], reverse=True)
+        if fallback:
+            return fallback[0][3]
     except Exception:
         pass
     return None
@@ -465,11 +474,13 @@ def montar_video_ffmpeg(
     fx          = _filtro_cinematografico(filtro_code)
 
     # setpts=2.0*PTS = vídeo em 0.5x (dobra a duração visual).
-    # O -t no final garante que o vídeo termina junto com o áudio.
+    # scale + crop garante 1080x1920 sem distorção independente da origem.
+    # Se portrait: escala pela largura (1080) e corta altura.
+    # Se landscape (fallback): escala pela altura (1920) e corta largura.
     filtro = (
         f"[0:v]setpts=2.0*PTS,"
-        f"scale=1920:1080:force_original_aspect_ratio=increase,"
-        f"crop=1920:1080,scale=1080:1920:flags=lanczos,setsar=1"
+        f"scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop=1080:1920,setsar=1"
         f"{fx},"
         f"ass='{ass_escaped}':fontsdir='{fonts_dir}'[v]"
     )
