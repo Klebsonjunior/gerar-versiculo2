@@ -195,6 +195,9 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
                 "duration_ms": chunk["duration"] // 10000,
             })
 
+    if not audio_chunks:
+        raise edge_tts.exceptions.NoAudioReceived()
+
     with open(audio_path, "wb") as f:
         for c in audio_chunks:
             f.write(c)
@@ -202,33 +205,54 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
     return words
 
 
-def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list[dict]:
+# Vozes de fallback por voz principal
+_FALLBACK_VOZ = {
+    "pt-BR-FabioNeural":     "pt-BR-AntonioNeural",
+    "pt-BR-ThalitaNeural":   "pt-BR-FranciscaNeural",
+    "pt-BR-AntonioNeural":   "pt-BR-FabioNeural",
+    "pt-BR-FranciscaNeural": "pt-BR-ThalitaNeural",
+}
+
+
+def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[dict], str]:
     """
     Roda o async em thread dedicada com event loop próprio.
-    Evita conflito com o event loop do Streamlit no Python 3.14+.
+    Tenta até 3x com a voz escolhida; se falhar, tenta a voz de fallback.
+    Retorna (words, voz_usada).
     """
-    resultado = {}
+    MAX_TENTATIVAS = 3
+    vozes_tentar = [voz]
+    fallback = _FALLBACK_VOZ.get(voz)
+    if fallback:
+        vozes_tentar.append(fallback)
 
-    def _run():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            resultado["words"] = loop.run_until_complete(
-                _gerar_audio_com_timing(texto, voz, audio_path)
-            )
-        except Exception as e:
-            resultado["error"] = e
-        finally:
-            loop.close()
+    ultimo_erro = None
 
-    import threading
-    t = threading.Thread(target=_run)
-    t.start()
-    t.join()
+    for voz_atual in vozes_tentar:
+        for tentativa in range(1, MAX_TENTATIVAS + 1):
+            resultado = {}
 
-    if "error" in resultado:
-        raise resultado["error"]
-    return resultado.get("words", [])
+            def _run(v=voz_atual):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    resultado["words"] = loop.run_until_complete(
+                        _gerar_audio_com_timing(texto, v, audio_path)
+                    )
+                except Exception as e:
+                    resultado["error"] = e
+                finally:
+                    loop.close()
+
+            t = threading.Thread(target=_run)
+            t.start()
+            t.join()
+
+            if "error" not in resultado:
+                return resultado["words"], voz_atual
+            ultimo_erro = resultado["error"]
+
+    raise ultimo_erro
 
 
 def baixar_video_pexels(api_key: str, busca: str) -> str | None:
@@ -487,11 +511,15 @@ if gerar:
         prog.progress(10, text="Gerando voz...")
 
         texto_narrado = f"{texto_versiculo.strip()}. {referencia.strip()}"
-        words = gerar_audio_com_timing(texto_narrado, voz_code, audio_path)
+        words, voz_usada = gerar_audio_com_timing(texto_narrado, voz_code, audio_path)
 
         if not words:
             st.error("Não foi possível gerar a narração. Tente novamente.")
             st.stop()
+
+        if voz_usada != voz_code:
+            nome_fallback = next((k for k, v in VOZES.items() if v == voz_usada), voz_usada)
+            st.warning(f"⚠️ A voz selecionada está indisponível no momento. Usando **{nome_fallback}** automaticamente.")
 
         duracao_ms = get_audio_duration_ms(audio_path)
         duracao_s  = duracao_ms / 1000
