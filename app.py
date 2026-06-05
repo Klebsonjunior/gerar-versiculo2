@@ -25,28 +25,28 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Sans:wght@300;400;500&display=swap');
 
 html, body, [data-testid="stAppViewContainer"] {
-    background: #080a0d !important;
+    background: #13161d !important;
     color: #ddd8cf !important;
 }
 [data-testid="stHeader"] { background: transparent !important; }
 .block-container { padding-top: 0 !important; max-width: 680px !important; }
 
 /* HERO */
-.hero { text-align:center; padding: 3.5rem 0 2.8rem; border-bottom: 1px solid #181c22; margin-bottom: 2.4rem; }
+.hero { text-align:center; padding: 3.5rem 0 2.8rem; border-bottom: 1px solid #252b38; margin-bottom: 2.4rem; }
 .hero-eyebrow { font-family:'DM Sans',sans-serif; font-size:0.6rem; font-weight:500; letter-spacing:0.25em; text-transform:uppercase; color:#8a7355; margin-bottom:1.4rem; }
 .hero-title { font-family:'Cormorant Garamond',serif; font-size:3.6rem; font-weight:300; color:#ede8df; line-height:1; margin:0 0 0.5rem; letter-spacing:0.06em; }
 .hero-title em { font-style:italic; color:#c4a96a; }
 .hero-sub { font-family:'DM Sans',sans-serif; font-size:0.8rem; color:#4a4d55; letter-spacing:0.06em; }
 
 /* CARDS */
-.card { background:#0e1116; border:1px solid #181c22; border-radius:10px; padding:1.5rem 1.7rem; margin-bottom:1rem; }
+.card { background:#1e2330; border:1px solid #252b38; border-radius:10px; padding:1.5rem 1.7rem; margin-bottom:1rem; }
 .card-label { font-family:'DM Sans',sans-serif; font-size:0.58rem; font-weight:500; letter-spacing:0.22em; text-transform:uppercase; color:#8a7355; margin-bottom:0.8rem; display:block; }
 
 /* INPUTS */
 [data-testid="stTextArea"] textarea,
 [data-testid="stTextInput"] input {
-    background:#12151a !important; border:1px solid #21252e !important; border-radius:7px !important;
-    color:#ddd8cf !important; font-family:'DM Sans',sans-serif !important; font-size:0.9rem !important;
+    background:#252b38 !important; border:1px solid #343d50 !important; border-radius:7px !important;
+    color:#eeeae2 !important; font-family:'DM Sans',sans-serif !important; font-size:0.9rem !important;
     caret-color:#c4a96a !important; line-height:1.6 !important;
 }
 [data-testid="stTextArea"] textarea:focus,
@@ -54,8 +54,8 @@ html, body, [data-testid="stAppViewContainer"] {
     border-color:#c4a96a66 !important; box-shadow:0 0 0 2px #c4a96a18 !important;
 }
 [data-testid="stSelectbox"] > div > div {
-    background:#12151a !important; border:1px solid #21252e !important;
-    border-radius:7px !important; color:#ddd8cf !important; font-family:'DM Sans',sans-serif !important;
+    background:#252b38 !important; border:1px solid #343d50 !important;
+    border-radius:7px !important; color:#eeeae2 !important; font-family:'DM Sans',sans-serif !important;
 }
 [data-testid="stTextArea"] label,
 [data-testid="stTextInput"] label,
@@ -93,31 +93,12 @@ html, body, [data-testid="stAppViewContainer"] {
 
 /* MISC */
 hr { border-color:#181c22 !important; margin:2rem 0 !important; }
-video { border-radius:10px; border:1px solid #181c22; }
+video { border-radius:10px; border:1px solid #252b38; }
 [data-testid="stSpinner"] > div { border-top-color:#c4a96a !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIDEBAR
-# ══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("### ✦ Configuração")
-    st.markdown("---")
-    pexels_key = st.text_input(
-        "Pexels API Key",
-        type="password",
-        placeholder="Cole sua chave aqui",
-        help="Chave gratuita em pexels.com/api",
-    )
-    st.markdown("""
-    <div style="font-size:.7rem;color:#4a4d55;line-height:1.7;margin-top:.8rem;">
-    Chave gratuita em<br>
-    <a href="https://www.pexels.com/api/" target="_blank" style="color:#c4a96a;">pexels.com/api</a>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown('<div style="font-size:.65rem;color:#2a2d35;line-height:1.7;">VerseClip v2.0<br>1080×1920 · 24fps · MP4</div>', unsafe_allow_html=True)
+# (sidebar removida — API key movida para o formulário principal)
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  HERO
@@ -133,6 +114,14 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════════════════
 #  FORMULÁRIO
 # ══════════════════════════════════════════════════════════════════════════════
+
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<span class="card-label">🔑 Pexels API Key</span>', unsafe_allow_html=True)
+pexels_key = st.text_input("Pexels API Key", type="password", placeholder="Cole sua chave gratuita do Pexels aqui...", label_visibility="collapsed")
+st.markdown('''<div style="font-size:.72rem;color:#5a6070;margin-top:.3rem;">
+Obtenha gratuitamente em <a href="https://www.pexels.com/api/" target="_blank" style="color:#c4a96a;text-decoration:none;">pexels.com/api</a>
+</div>''', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown('<span class="card-label">① Versículo</span>', unsafe_allow_html=True)
@@ -478,7 +467,7 @@ gerar = st.button("✦  GERAR VÍDEO")
 
 if gerar:
     if not pexels_key:
-        st.error("Insira a Pexels API Key na barra lateral.")
+        st.error("Insira a Pexels API Key no campo acima.")
         st.stop()
     if not texto_versiculo.strip() or not referencia.strip():
         st.error("Preencha o versículo e a referência.")
