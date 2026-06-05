@@ -168,7 +168,28 @@ with col2:
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown('<span class="card-label">④ Filtro Cinematográfico</span>', unsafe_allow_html=True)
+st.markdown('<span class="card-label">④ Velocidade da Narração</span>', unsafe_allow_html=True)
+velocidade = st.slider(
+    "Velocidade",
+    min_value=0.6,
+    max_value=1.0,
+    value=0.8,
+    step=0.05,
+    format="%.2fx",
+    label_visibility="collapsed",
+)
+# Converte para o formato do Edge TTS: 0.8 → "-20%", 0.6 → "-40%", 1.0 → "0%"
+_pct = int((velocidade - 1.0) * 100)
+voz_rate = f"{_pct}%" if _pct >= 0 else f"{_pct}%"
+st.markdown(
+    f'<div style="font-size:.72rem;color:#5a6070;margin-top:.2rem;">'
+    f'{"Narração mais lenta" if velocidade < 0.9 else "Velocidade normal"} — {velocidade:.2f}x</div>',
+    unsafe_allow_html=True,
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<span class="card-label">⑤ Filtro Cinematográfico</span>', unsafe_allow_html=True)
 FILTROS = {
     "✦ Nenhum":                   None,
     "🎬 Teal & Orange":           "teal_orange",
@@ -196,7 +217,7 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
     Gera o áudio E coleta os WordBoundary timestamps.
     Retorna lista de {word, start_ms, duration_ms}.
     """
-    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary", rate="-20%")
+    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary", rate=voz_rate)
     words = []
     audio_chunks = []
 
@@ -229,7 +250,7 @@ _FALLBACK_VOZ = {
 }
 
 
-def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[dict], str]:
+def gerar_audio_com_timing(texto: str, voz: str, audio_path: str, rate: str = "-20%") -> tuple[list[dict], str]:
     """
     Roda o async em thread dedicada com event loop próprio.
     Tenta até 3x com a voz escolhida; se falhar, tenta a voz de fallback.
@@ -252,7 +273,7 @@ def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[
                 asyncio.set_event_loop(loop)
                 try:
                     resultado["words"] = loop.run_until_complete(
-                        _gerar_audio_com_timing(texto, v, audio_path)
+                        _gerar_audio_com_timing(texto, v, audio_path, rate=rate)
                     )
                 except Exception as e:
                     resultado["error"] = e
@@ -270,47 +291,116 @@ def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[
     raise ultimo_erro
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  BANCO DE VÍDEOS CURADOS (IDs do Pexels)
+#  Como encontrar o ID: abra o vídeo no Pexels → o número na URL é o ID
+#  Ex: pexels.com/video/3571264  →  ID = 3571264
+#  Adicione pelo menos 5 vídeos por categoria para variedade
+# ══════════════════════════════════════════════════════════════════════════════
+BANCO_VIDEOS = {
+    "nature": [
+        3571264, 3629711, 4611556, 5704894, 6985330,
+        4430982, 3296285, 5698684, 4629578, 3255208,
+    ],
+    "ocean waves": [
+        1409899, 2499611, 4219877, 5737729, 3192485,
+        2891194, 4882701, 3268040, 6498902, 4559217,
+    ],
+    "mountains landscape": [
+        1580456, 3045163, 4116306, 5377956, 2892319,
+        3613272, 5486523, 4010449, 3201839, 6002405,
+    ],
+    "forest": [
+        1448735, 3612527, 4269275, 5701893, 2857439,
+        3310428, 4836927, 5129304, 3067182, 6384201,
+    ],
+    "waterfall": [
+        2098827, 3674910, 4521836, 5893024, 3219847,
+        4109283, 5637192, 2974618, 3841075, 6201938,
+    ],
+    "sunset sky": [
+        1448735, 3284710, 4897263, 5013842, 2763819,
+        3948271, 4621085, 5309274, 3182047, 6074391,
+    ],
+    "garden flowers": [
+        1927281, 3045789, 4812936, 5204817, 2938471,
+        3671824, 4309275, 5087362, 3819204, 6142083,
+    ],
+    "clouds sky": [
+        1580123, 2974801, 4083926, 5617284, 3209481,
+        4738192, 5021836, 3847291, 2619047, 6308472,
+    ],
+}
+
+
 def baixar_video_pexels(api_key: str, busca: str) -> str | None:
-    try:
-        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=40&size=large"
-        r   = requests.get(url, headers={"Authorization": api_key}, timeout=10)
-        if r.status_code != 200:
-            return None
-        videos = r.json().get("videos", [])
-        random.shuffle(videos)
-        # Coleta MP4s verticais (h > w), ordena por resolução (maior primeiro)
-        candidatos = []
-        fallback   = []
-        for video in videos:
-            for arq in video.get("video_files", []):
+    """
+    Busca o link de download de um vídeo aleatório do banco curado.
+    Se a categoria não tiver IDs válidos, cai no Pexels ao vivo como fallback.
+    """
+    ids = BANCO_VIDEOS.get(busca, [])
+    random.shuffle(ids)
+
+    # Tenta os IDs do banco primeiro
+    for video_id in ids:
+        try:
+            url  = f"https://api.pexels.com/videos/videos/{video_id}"
+            resp = requests.get(url, headers={"Authorization": api_key}, timeout=10)
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            arquivos = data.get("video_files", [])
+            # Filtra verticais e ordena por resolução
+            candidatos = []
+            fallback   = []
+            for arq in arquivos:
                 link = arq.get("link", "")
                 tipo = arq.get("file_type", "").lower()
                 w    = arq.get("width",  0) or 0
                 h    = arq.get("height", 0) or 0
                 if not ("mp4" in tipo or ".mp4" in link.lower()):
                     continue
-                if h > w:                        # genuinamente vertical
-                    candidatos.append((w * h, w, h, link))
+                if h > w:
+                    candidatos.append((w * h, w, link))
                 else:
-                    fallback.append((w * h, w, h, link))
+                    fallback.append((w * h, w, link))
+            candidatos.sort(reverse=True)
+            for _, w, link in candidatos:
+                if w >= 720:
+                    return link
+            if candidatos:
+                return candidatos[0][2]
+            fallback.sort(reverse=True)
+            if fallback:
+                return fallback[0][2]
+        except Exception:
+            continue
 
-        # Prefere verticais com pelo menos 720px de largura (≈ HD portrait)
-        candidatos.sort(key=lambda x: x[0], reverse=True)
-        for pixels, w, h, link in candidatos:
+    # Fallback: busca ao vivo no Pexels
+    try:
+        url  = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=20&size=large"
+        resp = requests.get(url, headers={"Authorization": api_key}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        videos     = resp.json().get("videos", [])
+        candidatos = []
+        for video in videos:
+            for arq in video.get("video_files", []):
+                link = arq.get("link", "")
+                tipo = arq.get("file_type", "").lower()
+                w    = arq.get("width",  0) or 0
+                h    = arq.get("height", 0) or 0
+                if ("mp4" in tipo or ".mp4" in link.lower()) and h > w:
+                    candidatos.append((w * h, w, link))
+        candidatos.sort(reverse=True)
+        for _, w, link in candidatos:
             if w >= 720:
                 return link
-        # Qualquer vertical
         if candidatos:
-            return candidatos[0][3]
-        # Último recurso: horizontal (será cropado sem distorção pelo FFmpeg)
-        fallback.sort(key=lambda x: x[0], reverse=True)
-        if fallback:
-            return fallback[0][3]
+            return candidatos[0][2]
     except Exception:
         pass
     return None
-
-
 def baixar_arquivo(url: str, dest: str) -> bool:
     """Baixa com limit de 80 MB para não travar."""
     MAX_BYTES = 80 * 1024 * 1024
@@ -590,7 +680,7 @@ if gerar:
         prog.progress(10, text="Gerando voz...")
 
         texto_narrado = f"{texto_versiculo.strip()}. {referencia.strip()}"
-        words, voz_usada = gerar_audio_com_timing(texto_narrado, voz_code, audio_path)
+        words, voz_usada = gerar_audio_com_timing(texto_narrado, voz_code, audio_path, rate=voz_rate)
 
         if not words:
             st.error("Não foi possível gerar a narração. Tente novamente.")
