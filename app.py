@@ -349,7 +349,7 @@ def obter_fonte_montserrat() -> str:
     """Baixa Montserrat Bold para /tmp se não existir."""
     caminho = os.path.join(tempfile.gettempdir(), "Montserrat-Bold.ttf")
     if not os.path.exists(caminho):
-        url = "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Bold.ttf"
+        url = "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         with open(caminho, "wb") as f:
