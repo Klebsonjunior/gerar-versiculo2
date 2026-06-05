@@ -167,6 +167,21 @@ with col2:
     cor_hex     = COR_LEGENDA[cor_label]
 st.markdown('</div>', unsafe_allow_html=True)
 
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown('<span class="card-label">④ Filtro Cinematográfico</span>', unsafe_allow_html=True)
+FILTROS = {
+    "✦ Nenhum":                   None,
+    "🎬 Teal & Orange":           "teal_orange",
+    "🌫️ Fade Claro":              "fade",
+    "⬛ Preto e Branco":           "bw",
+    "🌅 Dourado (Warm)":          "warm",
+    "🌊 Frio (Cool Blue)":        "cool",
+    "🎞️ Vintage":                 "vintage",
+}
+filtro_label = st.selectbox("Filtro", list(FILTROS.keys()), label_visibility="collapsed")
+filtro_code  = FILTROS[filtro_label]
+st.markdown('</div>', unsafe_allow_html=True)
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  FUNÇÕES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -181,7 +196,7 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
     Gera o áudio E coleta os WordBoundary timestamps.
     Retorna lista de {word, start_ms, duration_ms}.
     """
-    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary")
+    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary", rate="-50%")
     words = []
     audio_chunks = []
 
@@ -381,37 +396,84 @@ def obter_fonte_montserrat() -> str:
     return caminho
 
 
+# ── Filtros cinematográficos (FFmpeg curves/colorchannelmixer) ────────────
+def _filtro_cinematografico(codigo: str | None) -> str:
+    """Retorna o fragmento de filtro FFmpeg para o efeito escolhido."""
+    if not codigo:
+        return ""
+    filtros = {
+        # Teal & Orange: sombras frias, altas luzes quentes
+        "teal_orange": (
+            ",colorchannelmixer=rr=1.1:rg=0.05:rb=-0.05:"
+            "gr=-0.05:gg=0.95:gb=0.1:"
+            "br=-0.1:bg=0.15:bb=1.05,"
+            "curves=red=\'0/0 0.5/0.58 1/1\':"
+            "blue=\'0/0 0.5/0.52 1/0.9\'"
+        ),
+        # Fade: levanta negros, reduz contraste (estilo filme antigo)
+        "fade": (
+            ",curves=all=\'0/0.08 1/0.92\'"
+        ),
+        # Preto e branco alto contraste
+        "bw": (
+            ",hue=s=0,"
+            "curves=all=\'0/0 0.3/0.15 0.7/0.9 1/1\'"
+        ),
+        # Warm: empurra vermelhos/amarelos
+        "warm": (
+            ",colortemperature=temperature=7000,"
+            "curves=red=\'0/0 0.5/0.55 1/1\'"
+        ),
+        # Cool blue: empurra azuis/cianos
+        "cool": (
+            ",colortemperature=temperature=4500,"
+            "curves=blue=\'0/0 0.5/0.55 1/1\'"
+        ),
+        # Vintage: dessatura + vinheta de cor + fade
+        "vintage": (
+            ",hue=s=0.5,"
+            "curves=red=\'0/0.05 1/0.95\':"
+            "blue=\'0/0 1/0.85\',"
+            "vignette=PI/4"
+        ),
+    }
+    return filtros.get(codigo, "")
+
+
 def montar_video_ffmpeg(
-    video_path: str,
-    audio_path: str,
-    ass_path:   str,
-    output_path:str,
-    duracao:    float,
-    fonte_path: str,
+    video_path:  str,
+    audio_path:  str,
+    ass_path:    str,
+    output_path: str,
+    duracao:     float,
+    fonte_path:  str,
+    filtro_code: str | None = None,
 ) -> tuple[bool, str]:
     """
     Monta o vídeo final via FFmpeg puro:
     1. Redimensiona/crop para 1080×1920
     2. Loop ou trim conforme duração do áudio
-    3. Queima legendas ASS (libass)
-    4. Mescla áudio
+    3. Aplica filtro cinematográfico (opcional)
+    4. Queima legendas ASS (libass)
+    5. Mescla áudio
     """
-    # Escapa o caminho do arquivo ASS para o filtro FFmpeg
     ass_escaped = ass_path.replace("\\", "/").replace(":", "\\:")
     fonts_dir   = os.path.dirname(fonte_path)
+    fx          = _filtro_cinematografico(filtro_code)
 
     filtro = (
         f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920,setsar=1,"
+        f"crop=1080:1920,setsar=1"
+        f"{fx},"
         f"ass='{ass_escaped}':fontsdir='{fonts_dir}'[v]"
     )
 
     cmd = [
         "ffmpeg", "-y",
-        "-stream_loop", "-1",        # loop infinito no vídeo
+        "-stream_loop", "-1",
         "-i", video_path,
         "-i", audio_path,
-        "-t", str(duracao + 0.5),    # trim pela duração do áudio + margem
+        "-t", str(duracao + 0.5),
         "-filter_complex", filtro,
         "-map", "[v]",
         "-map", "1:a",
@@ -550,7 +612,7 @@ if gerar:
         prog.progress(70, text="Renderizando...")
 
         if tem_fundo:
-            ok, err = montar_video_ffmpeg(video_path, audio_path, ass_path, output_path, duracao_s, fonte_path)
+            ok, err = montar_video_ffmpeg(video_path, audio_path, ass_path, output_path, duracao_s, fonte_path, filtro_code)
         else:
             status.markdown("🎨 **Sem fundo disponível — usando fundo escuro...**")
             ok, err = montar_video_sem_fundo(audio_path, ass_path, output_path, duracao_s, fonte_path)
