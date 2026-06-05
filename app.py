@@ -196,7 +196,7 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
     Gera o áudio E coleta os WordBoundary timestamps.
     Retorna lista de {word, start_ms, duration_ms}.
     """
-    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary", rate="-50%")
+    communicate = edge_tts.Communicate(texto, voz, boundary="WordBoundary", rate="-20%")
     words = []
     audio_chunks = []
 
@@ -272,28 +272,31 @@ def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> tuple[list[
 
 def baixar_video_pexels(api_key: str, busca: str) -> str | None:
     try:
-        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=portrait&per_page=20&size=medium"
+        url = f"https://api.pexels.com/videos/search?query={busca}&orientation=landscape&per_page=30&size=large"
         r   = requests.get(url, headers={"Authorization": api_key}, timeout=10)
         if r.status_code != 200:
             return None
         videos = r.json().get("videos", [])
         random.shuffle(videos)
-        for video in videos:
-            for arq in video.get("video_files", []):
-                # Prefere arquivos HD (720p) para não travar o download
-                w = arq.get("width", 0)
-                h = arq.get("height", 0)
-                link = arq.get("link", "")
-                tipo = arq.get("file_type", "").lower()
-                if ("mp4" in tipo or ".mp4" in link.lower()) and h >= 720:
-                    return link
-        # Fallback: qualquer mp4
+        # Coleta todos os arquivos MP4 e ordena por resolução (4K primeiro)
+        candidatos = []
         for video in videos:
             for arq in video.get("video_files", []):
                 link = arq.get("link", "")
                 tipo = arq.get("file_type", "").lower()
+                w    = arq.get("width", 0) or 0
+                h    = arq.get("height", 0) or 0
                 if "mp4" in tipo or ".mp4" in link.lower():
-                    return link
+                    candidatos.append((w * h, link))
+        # Ordena do maior para o menor (4K = 3840×2160 = 8.3M px)
+        candidatos.sort(key=lambda x: x[0], reverse=True)
+        # Pega o melhor que não seja absurdamente grande (>200MB estimado)
+        for pixels, link in candidatos:
+            if pixels >= 1920 * 1080:   # pelo menos Full HD
+                return link
+        # Fallback: qualquer um
+        if candidatos:
+            return candidatos[0][1]
     except Exception:
         pass
     return None
@@ -348,8 +351,8 @@ Collisions: Normal
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Main,Montserrat,68,{ass_color},&H000000FF,&H00000000,&H99000000,-1,0,0,0,100,100,0,0,1,3.5,2,5,80,80,200,1
-Style: Ref,Montserrat,42,{ass_color},&H000000FF,&H00000000,&H99000000,0,1,0,0,100,100,2,0,1,2.5,1.5,2,80,80,140,1
+Style: Main,PlayfairDisplay-Bold,88,{ass_color},&H000000FF,&H00000000,&HAA000000,-1,0,0,0,100,100,1.5,0,1,4,3,5,80,80,220,1
+Style: Ref,PlayfairDisplay-Bold,52,{ass_color},&H000000FF,&H00000000,&HAA000000,0,1,0,0,100,100,3,0,1,3,2,2,80,80,160,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -385,11 +388,11 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 
 
 def obter_fonte_montserrat() -> str:
-    """Baixa Montserrat Bold para /tmp se não existir."""
-    caminho = os.path.join(tempfile.gettempdir(), "Montserrat-Bold.ttf")
+    """Baixa Playfair Display Bold para /tmp se não existir."""
+    caminho = os.path.join(tempfile.gettempdir(), "PlayfairDisplay-Bold.ttf")
     if not os.path.exists(caminho):
-        url = "https://raw.githubusercontent.com/JulietaUla/Montserrat/master/fonts/ttf/Montserrat-Bold.ttf"
-        r = requests.get(url, timeout=15)
+        url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf"
+        r = requests.get(url, timeout=15, allow_redirects=True)
         r.raise_for_status()
         with open(caminho, "wb") as f:
             f.write(r.content)
@@ -461,9 +464,12 @@ def montar_video_ffmpeg(
     fonts_dir   = os.path.dirname(fonte_path)
     fx          = _filtro_cinematografico(filtro_code)
 
+    # setpts=2.0*PTS = vídeo em 0.5x (dobra a duração visual).
+    # O -t no final garante que o vídeo termina junto com o áudio.
     filtro = (
-        f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        f"crop=1080:1920,setsar=1"
+        f"[0:v]setpts=2.0*PTS,"
+        f"scale=1920:1080:force_original_aspect_ratio=increase,"
+        f"crop=1920:1080,scale=1080:1920:flags=lanczos,setsar=1"
         f"{fx},"
         f"ass='{ass_escaped}':fontsdir='{fonts_dir}'[v]"
     )
@@ -473,13 +479,13 @@ def montar_video_ffmpeg(
         "-stream_loop", "-1",
         "-i", video_path,
         "-i", audio_path,
-        "-t", str(duracao + 0.5),
+        "-t", str(duracao + 0.3),
         "-filter_complex", filtro,
         "-map", "[v]",
         "-map", "1:a",
         "-c:v", "libx264",
         "-preset", "fast",
-        "-crf", "23",
+        "-crf", "22",
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
