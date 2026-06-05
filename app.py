@@ -1,6 +1,6 @@
 import streamlit as st
 import asyncio
-import nest_asyncio
+import threading
 import edge_tts
 import requests
 import random
@@ -9,8 +9,6 @@ import uuid
 import subprocess
 import tempfile
 import json
-
-nest_asyncio.apply()
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CONFIG
@@ -216,8 +214,32 @@ async def _gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list
 
 
 def gerar_audio_com_timing(texto: str, voz: str, audio_path: str) -> list[dict]:
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_gerar_audio_com_timing(texto, voz, audio_path))
+    """
+    Roda o async em thread dedicada com event loop próprio.
+    Evita conflito com o event loop do Streamlit no Python 3.14+.
+    """
+    resultado = {}
+
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            resultado["words"] = loop.run_until_complete(
+                _gerar_audio_com_timing(texto, voz, audio_path)
+            )
+        except Exception as e:
+            resultado["error"] = e
+        finally:
+            loop.close()
+
+    import threading
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+
+    if "error" in resultado:
+        raise resultado["error"]
+    return resultado.get("words", [])
 
 
 def baixar_video_pexels(api_key: str, busca: str) -> str | None:
