@@ -418,8 +418,8 @@ Collisions: Normal
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Main,PlayfairDisplay-Bold,88,{ass_color},&H000000FF,&H00000000,&HAA000000,-1,0,0,0,100,100,1.5,0,1,4,3,5,80,80,220,1
-Style: Ref,PlayfairDisplay-Bold,52,{ass_color},&H000000FF,&H00000000,&HAA000000,0,1,0,0,100,100,3,0,1,3,2,2,80,80,160,1
+Style: Main,Crimson Text,104,{ass_color},&H000000FF,&H00000000,&HAA000000,-1,0,0,0,100,100,1.5,0,1,4,3,5,80,80,220,1
+Style: Ref,Crimson Text,62,{ass_color},&H000000FF,&H00000000,&HAA000000,-1,0,0,0,100,100,3,0,1,3,2,2,80,80,160,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -455,10 +455,10 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 
 
 def obter_fonte_montserrat() -> str:
-    """Baixa Playfair Display Bold para /tmp se não existir."""
-    caminho = os.path.join(tempfile.gettempdir(), "PlayfairDisplay-Bold.ttf")
+    """Baixa Crimson Text Bold (serif estático, com peso bold real) para /tmp se não existir."""
+    caminho = os.path.join(tempfile.gettempdir(), "CrimsonText-Bold.ttf")
     if not os.path.exists(caminho):
-        url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf"
+        url = "https://raw.githubusercontent.com/google/fonts/main/ofl/crimsontext/CrimsonText-Bold.ttf"
         r = requests.get(url, timeout=15, allow_redirects=True)
         r.raise_for_status()
         with open(caminho, "wb") as f:
