@@ -387,12 +387,21 @@ def baixar_arquivo(url: str, dest: str) -> bool:
         return False
 
 
-def construir_ass(words: list[dict], referencia: str, cor_hex: str, duracao_total_ms: int) -> str:
+def construir_ass(words: list[dict], texto_original: str, referencia: str, cor_hex: str, duracao_total_ms: int) -> str:
     """
     Gera arquivo .ass com:
-    - Legenda principal: 3–4 palavras por linha, aparece/desaparece sincronizado
+    - Legenda principal: texto inteiro, sincronizado com o áudio
     - Referência bíblica: aparece no último terço do vídeo, centralizada embaixo
+
+    O WordBoundary do edge-tts devolve só a "palavra pura" (sem vírgula, dois
+    pontos, ponto final etc.), usada apenas para sincronizar. Sempre que o
+    número de palavras bater com o texto original, a exibição usa o texto
+    original (com acentos e pontuação corretos) em vez do texto do TTS.
     """
+    tokens_originais = texto_original.split()
+    if len(tokens_originais) == len(words):
+        for w, tok in zip(words, tokens_originais):
+            w["word"] = tok
 
     def ms_to_ass(ms: int) -> str:
         h   = ms // 3600000
@@ -669,7 +678,7 @@ if gerar:
         prog.progress(25, text="Sincronizando legendas...")
 
         fonte_path = obter_fonte_montserrat()
-        ass_content = construir_ass(words, referencia.strip(), cor_hex, duracao_ms)
+        ass_content = construir_ass(words, texto_narrado, referencia.strip(), cor_hex, duracao_ms)
         with open(ass_path, "w", encoding="utf-8") as f:
             f.write(ass_content)
 
