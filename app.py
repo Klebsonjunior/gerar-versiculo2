@@ -425,23 +425,23 @@ Style: Ref,PlayfairDisplay-Bold,52,{ass_color},&H000000FF,&H00000000,&HAA000000,
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 """
 
-    # Agrupa palavras em blocos de 3–4 palavras
-    WORDS_PER_LINE = 3
-    lines = []
+    # Texto inteiro aparece de uma vez (do início ao fim da narração),
+    # quebrado em linhas de ~5 palavras só para caber na tela.
+    WORDS_PER_VISUAL_LINE = 5
+    start = words[0]["start_ms"] if words else 0
+    end   = (words[-1]["start_ms"] + words[-1]["duration_ms"] + 120) if words else duracao_total_ms
+
+    linhas_visuais = []
     i = 0
     while i < len(words):
-        bloco = words[i: i + WORDS_PER_LINE]
-        start = bloco[0]["start_ms"]
-        end   = bloco[-1]["start_ms"] + bloco[-1]["duration_ms"] + 120  # 120ms gap
-        text  = " ".join(w["word"] for w in bloco)
-        lines.append((start, end, text))
-        i += WORDS_PER_LINE
+        bloco = words[i: i + WORDS_PER_VISUAL_LINE]
+        linhas_visuais.append(" ".join(w["word"] for w in bloco))
+        i += WORDS_PER_VISUAL_LINE
+    texto_completo = "\\N".join(linhas_visuais)
 
-    events = []
-    for start, end, text in lines:
-        events.append(
-            f"Dialogue: 0,{ms_to_ass(start)},{ms_to_ass(end)},Main,,0,0,0,,{text}"
-        )
+    events = [
+        f"Dialogue: 0,{ms_to_ass(start)},{ms_to_ass(end)},Main,,0,0,0,,{texto_completo}"
+    ]
 
     # Referência: último terço do vídeo
     ref_start = int(duracao_total_ms * 0.70)
